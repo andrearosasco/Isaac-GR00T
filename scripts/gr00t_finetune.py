@@ -16,13 +16,14 @@
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Literal
 
 import torch
 import tyro
 from transformers import TrainingArguments
+from huggingface_hub import snapshot_download
 
 from gr00t.data.dataset import LeRobotMixtureDataset, LeRobotSingleDataset
 from gr00t.data.schema import EmbodimentTag
@@ -38,13 +39,13 @@ class ArgsConfig:
     """Configuration for GR00T model fine-tuning."""
 
     # Dataset parameters
-    dataset_path: List[str]
+    dataset_path: List[str] = field(default_factory=lambda: ['ar0s/ergocub-pick-plush'])
     """Path to the dataset directory or directories"""
 
     output_dir: str = "/tmp/gr00t"
     """Directory to save model checkpoints."""
 
-    data_config: Literal[tuple(DATA_CONFIG_MAP.keys())] = "fourier_gr1_arms_only"
+    data_config: Literal[tuple(DATA_CONFIG_MAP.keys())] = "ergocub_arms_only"
     """Data configuration name from DATA_CONFIG_MAP, we assume all datasets have the same data config"""
 
     # Training parameters
@@ -111,7 +112,8 @@ class ArgsConfig:
     embodiment_tag: Literal[tuple(EMBODIMENT_TAG_MAPPING.keys())] = "new_embodiment"
     """Embodiment tag to use for training. e.g. 'new_embodiment', 'gr1'"""
 
-    video_backend: Literal["decord", "torchvision_av"] = "decord"
+    ## decord does not work (maybe because I had to install ffmpeg with conda)
+    video_backend: Literal["decord", "torchvision_av"] = "torchvision_av"  
     """Video backend to use for training. [decord, torchvision_av]"""
 
     # Mixture dataset parameters
@@ -138,10 +140,15 @@ def main(config: ArgsConfig):
     modality_configs = data_config_cls.modality_config()
     transforms = data_config_cls.transform()
 
+    dataset_paths = [
+        path if os.path.exists(path) else snapshot_download(repo_id=path, repo_type="dataset", local_dir=f"./datasets/{path.replace('/', '_')}")
+        for path in config.dataset_path
+    ]
+
     # 1.2 data loader: we will use either single dataset or mixture dataset
     if len(config.dataset_path) == 1:
         train_dataset = LeRobotSingleDataset(
-            dataset_path=config.dataset_path[0],
+            dataset_path=dataset_paths[0],
             modality_configs=modality_configs,
             transforms=transforms,
             embodiment_tag=embodiment_tag,  # This will override the dataset's embodiment tag to "new_embodiment"
@@ -149,7 +156,7 @@ def main(config: ArgsConfig):
         )
     else:
         single_datasets = []
-        for p in config.dataset_path:
+        for p in dataset_paths:
             assert os.path.exists(p), f"Dataset path {p} does not exist"
             ## We use the same transforms, modality configs, and embodiment tag for all datasets here,
             ## in reality, you can use dataset from different modalities and embodiment tags

@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from gr00t.data.dataset import ModalityConfig
 from gr00t.data.transform.base import ComposedModalityTransform, ModalityTransform
 from gr00t.data.transform.concat import ConcatTransform
+from gr00t.data.transform.quaternion import QuaternionXYZWToWXYZTransform
 from gr00t.data.transform.state_action import (
     StateActionSinCosTransform,
     StateActionToTensor,
@@ -876,6 +877,157 @@ class AgibotGenie1DataConfig:
 
         return ComposedModalityTransform(transforms=transforms)
 
+###########################################################################################
+
+
+class ErgoCubArmsOnlyDataConfig(BaseDataConfig):
+    """
+    Fixed ErgoCub data configuration with proper quaternion handling.
+    
+    This configuration correctly processes quaternions by:
+    1. Splitting position and orientation into separate modality keys
+    2. Converting quaternions from XYZW to WXYZ format before rotation processing
+    3. Converting quaternions to rotation_6d for better training stability
+    
+    Use this instead of ErgoCubArmsOnlyDataConfig for datasets with quaternion orientations.
+    """
+    video_keys = ["video.ego_view"]
+    
+    # Separate position and orientation components for proper quaternion handling
+    state_keys = [
+        "state.left_arm_position",
+        "state.left_arm_orientation", 
+        "state.right_arm_position",
+        "state.right_arm_orientation",
+        "state.neck_orientation",
+        "state.left_hand",
+        "state.right_hand",
+    ]
+    
+    action_keys = [
+        "action.left_arm_position",
+        "action.left_arm_orientation",
+        "action.right_arm_position", 
+        "action.right_arm_orientation",
+        "action.neck_orientation",
+        "action.left_hand",
+        "action.right_hand",
+    ]
+    
+    language_keys = ["annotation.human.action.task_description"]
+    observation_indices = [0]
+    action_indices = list(range(16))
+
+    def modality_config(self) -> dict[str, ModalityConfig]:
+        video_modality = ModalityConfig(
+            delta_indices=self.observation_indices,
+            modality_keys=self.video_keys,
+        )
+
+        state_modality = ModalityConfig(
+            delta_indices=self.observation_indices,
+            modality_keys=self.state_keys,
+        )
+
+        action_modality = ModalityConfig(
+            delta_indices=self.action_indices,
+            modality_keys=self.action_keys,
+        )
+
+        language_modality = ModalityConfig(
+            delta_indices=self.observation_indices,
+            modality_keys=self.language_keys,
+        )
+
+        modality_configs = {
+            "video": video_modality,
+            "state": state_modality,
+            "action": action_modality,
+            "language": language_modality,
+        }
+
+        return modality_configs
+
+    def transform(self) -> ComposedModalityTransform:
+        transforms = [
+            # video transforms
+            VideoToTensor(apply_to=self.video_keys),
+            VideoCrop(apply_to=self.video_keys, scale=0.95),
+            VideoResize(apply_to=self.video_keys, height=224, width=224, interpolation="linear"),
+            VideoColorJitter(
+                apply_to=self.video_keys,
+                brightness=0.3,
+                contrast=0.4,
+                saturation=0.5,
+                hue=0.08,
+            ),
+            VideoToNumpy(apply_to=self.video_keys),
+            # state transforms
+            StateActionToTensor(apply_to=self.state_keys),
+            QuaternionXYZWToWXYZTransform(
+                apply_to=[],  # Not using apply_to, using quaternion_keys instead
+                quaternion_keys=[
+                    "state.left_arm_orientation",
+                    "state.right_arm_orientation", 
+                    "state.neck_orientation",
+                ]
+            ),
+            StateActionTransform(
+                apply_to=self.state_keys,
+                # Convert quaternions to rotation_6d for better training stability
+                target_rotations={
+                    "state.left_arm_orientation": "rotation_6d",
+                    "state.right_arm_orientation": "rotation_6d", 
+                    "state.neck_orientation": "rotation_6d",
+                },
+                normalization_modes={
+                    # Use min_max for ALL state components to match actions
+                    # This preserves the relationship between state observation and action prediction
+                    key: "min_max" for key in self.state_keys
+                }
+            ),
+            
+            # action transforms  
+            StateActionToTensor(apply_to=self.action_keys),
+            # CRITICAL: Convert quaternions from XYZW to WXYZ format before rotation processing
+            QuaternionXYZWToWXYZTransform(
+                apply_to=[],  # Not using apply_to, using quaternion_keys instead
+                quaternion_keys=[
+                    "action.left_arm_orientation",
+                    "action.right_arm_orientation",
+                    "action.neck_orientation", 
+                ]
+            ),
+            StateActionTransform(
+                apply_to=self.action_keys,
+                # Convert quaternions to rotation_6d for better training stability
+                target_rotations={
+                    "action.left_arm_orientation": "rotation_6d",
+                    "action.right_arm_orientation": "rotation_6d",
+                    "action.neck_orientation": "rotation_6d", 
+                },
+                normalization_modes={
+                    # All action components use min_max normalization
+                    key: "min_max" for key in self.action_keys
+                },
+            ),
+            
+            # concat transforms
+            ConcatTransform(
+                video_concat_order=self.video_keys,
+                state_concat_order=self.state_keys,
+                action_concat_order=self.action_keys,
+            ),
+            
+            # model-specific transform
+            GR00TTransform(
+                state_horizon=len(self.observation_indices),
+                action_horizon=len(self.action_indices),
+                max_state_dim=64,
+                max_action_dim=32,
+            ),
+        ]
+        return ComposedModalityTransform(transforms=transforms)
 
 ###########################################################################################
 
@@ -892,4 +1044,8 @@ DATA_CONFIG_MAP = {
     "unitree_g1_full_body": UnitreeG1FullBodyDataConfig(),
     "oxe_droid": OxeDroidDataConfig(),
     "agibot_genie1": AgibotGenie1DataConfig(),
+    'ergocub_arms_only': ErgoCubArmsOnlyDataConfig(),
 }
+
+
+###########################################################################################
