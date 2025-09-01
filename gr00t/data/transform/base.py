@@ -15,6 +15,7 @@
 
 from abc import ABC, abstractmethod
 from typing import Any
+import copy
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -51,6 +52,12 @@ class ModalityTransform(BaseModel, ABC):
         Subclasses can override this method if they need to do something more complex.
         """
         self.dataset_metadata = dataset_metadata
+
+    # Extension hook: transforms that change dimensionality can announce new final dims.
+    # Returns mapping full_key (e.g. 'action.eef_rotation_delta') -> new_dim (int).
+    # Default: no overrides.
+    def shape_overrides(self) -> dict[str, int]:  # pragma: no cover - trivial
+        return {}
 
     def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         """Apply the transformation to the data corresponding to target_keys and return the processed data.
@@ -104,8 +111,31 @@ class ComposedModalityTransform(ModalityTransform):
     model_config = ConfigDict(arbitrary_types_allowed=True, from_attributes=True)
 
     def set_metadata(self, dataset_metadata: DatasetMetadata):
+        # We allow earlier transforms to declare dimension changes that later ones (e.g. concat) should see.
+        meta = dataset_metadata
+        meta_copy = None  # Lazy deep-copy only if an override appears.
+        any_override = False
         for transform in self.transforms:
-            transform.set_metadata(dataset_metadata)
+            transform.set_metadata(meta)
+            overrides = transform.shape_overrides()
+            if overrides:
+                if meta_copy is None:
+                    meta_copy = copy.deepcopy(meta)
+                    meta = meta_copy
+                for full_key, new_dim in overrides.items():
+                    try:
+                        modality, sub = full_key.split(".", 1)
+                    except ValueError as e:  # safety
+                        raise ValueError(f"Invalid override key '{full_key}': {e}") from e
+                    modality_cfg = getattr(meta.modalities, modality, None)
+                    assert modality_cfg is not None, f"Modality '{modality}' not in metadata"
+                    assert sub in modality_cfg, f"Subkey '{sub}' not in modality '{modality}'"
+                    modality_cfg[sub].shape = [new_dim]
+                any_override = True
+        # Ensure all transforms reference the final (possibly copied) metadata object
+        if any_override:
+            for transform in self.transforms:
+                transform.dataset_metadata = meta
 
     def apply(self, data: dict[str, Any]) -> dict[str, Any]:
         for i, transform in enumerate(self.transforms):

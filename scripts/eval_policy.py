@@ -49,13 +49,13 @@ class ArgsConfig:
     port: int = 5555
     """Port to connect to."""
 
-    plot: bool = False
+    plot: bool = True
     """Whether to plot the images."""
 
-    modality_keys: List[str] = field(default_factory=lambda: ["right_arm", "left_arm"])
+    modality_keys: List[str] = field(default_factory=lambda: ["right_arm_position", "right_hand"])
     """Modality keys to evaluate."""
 
-    data_config: Literal[tuple(DATA_CONFIG_MAP.keys())] = "fourier_gr1_arms_only"
+    data_config: Literal[tuple(DATA_CONFIG_MAP.keys())] = "ergocub_arms_only"
     """Data config to use."""
 
     steps: int = 150
@@ -67,22 +67,22 @@ class ArgsConfig:
     action_horizon: int = None
     """Action horizon to evaluate. If None, will use the data config's action horizon."""
 
-    video_backend: Literal["decord", "torchvision_av"] = "decord"
+    video_backend: Literal["decord", "torchvision_av"] = "torchvision_av"
     """Video backend to use for various codec options. h264: decord or av: torchvision_av"""
 
-    dataset_path: str = "demo_data/robot_sim.PickNPlace/"
+    dataset_path: str = "datasets/ar0s_ergocub-pick-plush"
     """Path to the dataset."""
 
-    embodiment_tag: Literal[tuple(EMBODIMENT_TAG_MAPPING.keys())] = "gr1"
+    embodiment_tag: Literal[tuple(EMBODIMENT_TAG_MAPPING.keys())] = "new_embodiment"
     """Embodiment tag to use."""
 
-    model_path: str = None
+    model_path: str = './output/checkpoint-10000'
     """Path to the model checkpoint."""
 
     denoising_steps: int = 4
     """Number of denoising steps to use."""
 
-    save_plot_path: str = None
+    save_plot_path: str = './output/checkpoint-10000/ar0s_ergocub-pick-plush'
     """Path to save the plot."""
 
 

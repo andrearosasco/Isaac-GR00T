@@ -333,6 +333,27 @@ class StateActionTransform(InvertibleModalityTransform):
 
         return super().model_dump(*args, include=include, **kwargs)
 
+    def shape_overrides(self) -> dict[str, int]:  # Announce representation-induced dim changes
+        # If a target rotation changes representation size, override final shape so downstream concat sees it.
+        rep_dim = {
+            "axis_angle": 3,
+            "rotation_6d": 6,
+            "quaternion": 4,
+        }
+        overrides: dict[str, int] = {}
+        for key, target in self.target_rotations.items():
+            base = target.split("_", 1)[0] if target.startswith("euler_angles") else target
+            if base.startswith("euler_angles"):
+                base = "euler_angles"  # treat any euler variant as 3
+            if base == "euler_angles":
+                new_dim = 3
+            else:
+                new_dim = rep_dim[base]
+            # original dim from metadata prior to override
+            if key in self.modality_metadata and self.modality_metadata[key].shape[0] != new_dim:
+                overrides[key] = new_dim
+        return overrides
+
     @field_validator("modality_metadata", mode="before")
     def validate_modality_metadata(cls, v):
         for modality_key, config in v.items():
@@ -604,3 +625,14 @@ class StateActionSinCosTransform(ModalityTransform):
             cos_state = torch.cos(state)
             data[key] = torch.cat([sin_state, cos_state], dim=-1)
         return data
+
+    def set_metadata(self, dataset_metadata: DatasetMetadata):  # capture original dims
+        super().set_metadata(dataset_metadata)
+        self._original_dims = {}
+        for key in self.apply_to:
+            modality, sub = key.split(".")
+            cfg = getattr(dataset_metadata.modalities, modality)
+            self._original_dims[key] = cfg[sub].shape[0]
+
+    def shape_overrides(self) -> dict[str, int]:  # double each key dim
+        return {k: d * 2 for k, d in getattr(self, "_original_dims", {}).items()}

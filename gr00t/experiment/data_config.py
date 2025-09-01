@@ -881,16 +881,6 @@ class AgibotGenie1DataConfig:
 
 
 class ErgoCubArmsOnlyDataConfig(BaseDataConfig):
-    """
-    Fixed ErgoCub data configuration with proper quaternion handling.
-    
-    This configuration correctly processes quaternions by:
-    1. Splitting position and orientation into separate modality keys
-    2. Converting quaternions from XYZW to WXYZ format before rotation processing
-    3. Converting quaternions to rotation_6d for better training stability
-    
-    Use this instead of ErgoCubArmsOnlyDataConfig for datasets with quaternion orientations.
-    """
     video_keys = ["video.ego_view"]
     
     # Separate position and orientation components for proper quaternion handling
@@ -1002,9 +992,9 @@ class ErgoCubArmsOnlyDataConfig(BaseDataConfig):
                 apply_to=self.action_keys,
                 # Convert quaternions to rotation_6d for better training stability
                 target_rotations={
-                    "action.left_arm_orientation": "rotation_6d",
-                    "action.right_arm_orientation": "rotation_6d",
-                    "action.neck_orientation": "rotation_6d", 
+                    "action.left_arm_orientation": "axis_angle",
+                    "action.right_arm_orientation": "axis_angle",
+                    "action.neck_orientation": "axis_angle", 
                 },
                 normalization_modes={
                     # All action components use min_max normalization

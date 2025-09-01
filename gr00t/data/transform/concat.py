@@ -147,7 +147,7 @@ class ConcatTransform(InvertibleModalityTransform):
                 if self.is_rotation_key(key):
                     target_shapes.append(3)  # Allow for axis angle
                 assert (
-                    self.action_dims[key] == data[key].shape[-1]
+                    data[key].shape[-1] in target_shapes
                 ), f"Action dim mismatch for {key=}, {self.action_dims[key]=}, {data[key].shape[-1]=}"
             # Concatenate the action keys
             # We'll have StateActionToTensor before this transform, so here we use torch.cat

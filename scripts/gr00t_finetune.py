@@ -42,7 +42,7 @@ class ArgsConfig:
     dataset_path: List[str] = field(default_factory=lambda: ['ar0s/ergocub-pick-plush'])
     """Path to the dataset directory or directories"""
 
-    output_dir: str = "/tmp/gr00t"
+    output_dir: str = "./output"
     """Directory to save model checkpoints."""
 
     data_config: Literal[tuple(DATA_CONFIG_MAP.keys())] = "ergocub_arms_only"
