@@ -25,6 +25,16 @@
 <img src="media/robot-demo.gif" width="800" alt="NVIDIA Isaac GR00T N1.5 Header">
 </div>
 
+<div>
+
+---
+> We now provide **finetuning scripts** and release **HuggingFace checkpoints**, along with results on **widely used academic simulation benchmarks**, making it easier to compare with prior work, ensure reproducibility, and build on a shared foundation for future research.
+>
+> For more, please refer to the [benchmark results folder](./examples).
+---
+
+</div>
+
 > We just released GR00T N1.5, an updated version of GR00T N1 with improved performance and new features. Check out the release blog post (https://research.nvidia.com/labs/gear/gr00t-n1_5/) for more details.
 
 > To use the older version, N1, please checkout the [n1-release](https://github.com/NVIDIA/Isaac-GR00T/tree/n1-release) release branch.
@@ -118,6 +128,18 @@ pip install --no-build-isolation flash-attn==2.7.1.post4
 
 We provide accessible Jupyter notebooks and detailed documentation in the [`./getting_started`](./getting_started) folder. Utility scripts can be found in the [`./scripts`](./scripts) folder. Additionally, a comprehensive tutorial for finetuning the model on the SO-101 robot is available on [HuggingFace](https://huggingface.co/blog/nvidia/gr00t-n1-5-so101-tuning).
 
+## 0. Quick Start
+
+Download the model checkpoint and run the inference service.
+```bash
+python scripts/inference_service.py --model-path nvidia/GR00T-N1.5-3B --server
+```
+
+On a different terminal, run the client mode to send requests to the server. This will send a random observation to the server and get an action back.
+```bash
+python scripts/inference_service.py  --client
+```
+
 ## 1. Data Format & Loading
 
 - To load and process the data, we use [Huggingface LeRobot data](https://github.com/huggingface/lerobot), but with a more detailed modality and annotation schema (we call it "LeRobot compatible data schema").
@@ -195,11 +217,10 @@ action_chunk = policy.get_action(dataset[0])
 User can also run the inference service using the provided script. The inference service can run in either server mode or client mode.
 
 ```bash
+# server
 python scripts/inference_service.py --model-path nvidia/GR00T-N1.5-3B --server
-```
 
-On a different terminal, run the client mode to send requests to the server.
-```bash
+# client
 python scripts/inference_service.py  --client
 ```
 
@@ -341,6 +362,27 @@ By default, the `gr00t_finetune.py` imposes equal weights to all datasets, with 
 *Is LoRA finetuning supported?*
 
 Yes, you can use LoRA finetuning to finetune the model. This can be enabled by indicating `--lora_rank 64  --lora_alpha 128` in the finetuning script. However, we recommend using the full model finetuning for better performance.
+
+*How to use GR00T on Blackwell Architecture?*
+
+The SO-101 demo has been tested on an RTX Pro 6000 Workstation Edition GPU.
+
+ These were the steps necessary for testing. In short, what's different is installing a particular version of PyTorch, then building Flash Attention from source, then using it. These instructions may need to be adapted for your particular machine.
+
+1. Clone the GR00T repo.
+2. Create and activate a GR00T conda environment as normal.
+3. Install a stable version of PyTorch according to your CUDA version. Find the correct version using the helper website [here](https://pytorch.org/get-started/locally/). Example for CUDA 12.8:
+`pip3 install torch torchvision`
+4. To confirm compatability between torch and CUDA versions:
+`python -c "import torch; print(torch.version.cuda); print(torch.cuda.get_device_capability())"`
+5. Clone the `flash_attention` repo: 
+`git clone https://github.com/Dao-AILab/flash-attention.git`
+6. Checkout a recent version: `git checkout v2.8.3`
+7. Set the following environment variable in your terminal:
+`export TORCH_CUDA_ARCH_LIST="sm_120"`
+8. `cd flash-attention`
+9. Install flash-attn by running the following inside the flash-attention repo: `pip install .`
+10. Continue to post-training.
 
 # Contributing
 
