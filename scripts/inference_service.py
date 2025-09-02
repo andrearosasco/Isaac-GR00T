@@ -57,13 +57,13 @@ from gr00t.model.policy import Gr00tPolicy
 class ArgsConfig:
     """Command line arguments for the inference service."""
 
-    model_path: str = "nvidia/GR00T-N1.5-3B"
+    model_path: str = "./output/checkpoint-10000"
     """Path to the model checkpoint directory."""
 
-    embodiment_tag: Literal[tuple(EMBODIMENT_TAG_MAPPING.keys())] = "gr1"
+    embodiment_tag: Literal[tuple(EMBODIMENT_TAG_MAPPING.keys())] = "new_embodiment"
     """The embodiment tag for the model."""
 
-    data_config: str = "fourier_gr1_arms_waist"
+    data_config: str = "ergocub_arms_only"
     """
     The name of the data config to use, e.g. so100, fourier_gr1_arms_only, unitree_g1, etc.
 
@@ -77,7 +77,7 @@ class ArgsConfig:
     host: str = "localhost"
     """The host address for the server."""
 
-    server: bool = False
+    server: bool = True
     """Whether to run the server."""
 
     client: bool = False
